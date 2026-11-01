@@ -1,0 +1,55 @@
+# Plan morning-digest § 3 and § 4. Renders /digest/2026-10-28 in CI and publishes it to GitHub Pages
+# as one HTML file. The preview never enters git (ADR 0003): the lane marker comes from the repo
+# variable LANE_MARKER. Unset the variable and run again to take the marker off the same link.
+name: preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      night:
+        description: Night to preview
+        default: '2026-10-28'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Write .env
+        run: |
+          sed "s/^LANE_MARKER=.*/LANE_MARKER=${LANE_MARKER}/" .env.example > .env
+        env:
+          LANE_MARKER: ${{ vars.LANE_MARKER }}
+      - name: Render the page
+        run: |
+          pnpm start > rig.log 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://localhost:8787/health > /dev/null && break; sleep 1; done
+          mkdir -p _site
+          curl -fsS "http://localhost:8787/digest/${{ inputs.night }}" -o _site/index.html
+          grep -o '<span class="marker">[^<]*</span>' _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
