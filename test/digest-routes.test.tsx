@@ -80,8 +80,9 @@ const badLog = [
   '',
 ].join('\n');
 
-// Hono's own answer when no route is mounted. Once the handler exists, the body is the contract.
-const UNMOUNTED = '404 Not Found';
+// The page escapes the apostrophe ('didn&#39;t'), so match the text, not the markup.
+const PARSE_NOTE = /1 line\(s\) didn(?:'|&#39;)t parse/;
+const ANY_PARSE_NOTE = /didn(?:'|&#39;)t parse/;
 
 let dir: string;
 
@@ -90,7 +91,9 @@ function app() {
 }
 
 function rowMarkup(html: string, job: string): string {
-  const m = html.match(new RegExp(`<tr[^>]*>[\\s\\S]*?<td[^>]*>${job}</td>[\\s\\S]*?</tr>`));
+  // One row only: nothing between its <tr> and the job cell may close another row.
+  const name = job.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const m = html.match(new RegExp(`<tr[^>]*>(?:(?!</tr>)[\\s\\S])*?<td[^>]*>${name}</td>[\\s\\S]*?</tr>`));
   if (!m) throw new Error(`no row for ${job}`);
   return m[0];
 }
@@ -114,7 +117,6 @@ function expectCells(html: string, row: DigestRow) {
 
 function expectNoLog(status: number, body: string, night: string, as: 'page' | 'json') {
   expect(status).toBe(404);
-  if (body === UNMOUNTED) return;
   if (as === 'json') {
     expect(JSON.parse(body)).toEqual({ error: `no run log for ${night}` });
     return;
@@ -152,7 +154,7 @@ describe('GET /digest/:night', () => {
     expect(rowMarkup(html, 'alpha')).not.toContain('class="warn"');
     expect(rowMarkup(html, 'beta')).toMatch(/^<tr[^>]*class="warn"/);
     expect(rowMarkup(html, 'gamma')).toMatch(/^<tr[^>]*class="warn"/);
-    expect(html).not.toContain("didn't parse");
+    expect(html).not.toMatch(ANY_PARSE_NOTE);
     expect(html).not.toContain('nothing ran');
   });
 
@@ -167,7 +169,7 @@ describe('GET /digest/:night', () => {
     const html = await res.text();
     expect(html).toContain(`<title>rig · digest ${EMPTY}</title>`);
     expect(html).toContain('nothing ran');
-    expect(html).not.toContain("didn't parse");
+    expect(html).not.toMatch(ANY_PARSE_NOTE);
     expect(html).not.toContain(`no run log for ${EMPTY}`);
   });
 
@@ -177,7 +179,7 @@ describe('GET /digest/:night', () => {
     const html = await res.text();
     expectCells(html, badRow);
     const tableEnd = html.indexOf('</table>');
-    const note = html.indexOf("1 line(s) didn't parse");
+    const note = html.search(PARSE_NOTE);
     expect(tableEnd).toBeGreaterThan(-1);
     expect(note).toBeGreaterThan(tableEnd);
   });
