@@ -1,6 +1,6 @@
 # 0002 · Plans are files, work is issues
 
-- Status: accepted · 2026-10-13 · amended by 0004 (issues as files when GitHub's can't be reached)
+- Status: accepted · 2026-10-13 · amended by 0004 (issues as files when GitHub's can't be reached) and 0005 (issue shape)
 
 ## Context
 
